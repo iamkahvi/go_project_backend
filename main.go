@@ -5,14 +5,14 @@ import (
 	"strings"
 
 	"example.com/gin_server/storage"
+	"github.com/gin-contrib/cors"
 
 	"github.com/gin-gonic/gin"
 )
 
 // ResponseBody : struct to bind the JSON response body
 type ResponseBody struct {
-	URL     string `json:"url"`
-	Message string `json:"message"`
+	User string `json:"user"`
 }
 
 const m string = "pong"
@@ -22,6 +22,8 @@ func pong(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"message": "pong",
 	})
+	fmt.Println(c.Request.Header)
+	fmt.Println(c.Request.Body)
 }
 
 func showUser(d *storage.DBS) gin.HandlerFunc {
@@ -74,8 +76,11 @@ func post(d *storage.DBS) gin.HandlerFunc {
 		var rb ResponseBody
 		c.BindJSON(&rb)
 
+		d.Users = append(d.Users, rb.User)
 		fmt.Println(rb)
-		c.JSON(200, gin.H{"message": "saved"})
+
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.JSON(200, gin.H{"list": d.UserList()})
 	}
 }
 
@@ -91,6 +96,10 @@ func main() {
 	d := storage.DBS{Number: 0, DB: make(map[string]string)}
 
 	r := gin.Default()
+
+	config := cors.DefaultConfig()
+	config.AllowOrigins = []string{"http://google.com", "http://localhost:3000"}
+	r.Use(cors.New(config))
 
 	r.LoadHTMLGlob("views/*")
 	r.GET("/", func(c *gin.Context) {
