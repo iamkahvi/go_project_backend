@@ -1,8 +1,6 @@
 package storage
 
 import (
-	"fmt"
-
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jinzhu/gorm"
@@ -41,13 +39,19 @@ func (d *DB) InitDB() {
 	d.db = db
 }
 
+// DeleteUser : Method to delete a user
+func (d *DB) DeleteUser(id uint) int {
+	var user User
+	user.Model.ID = id
+	d.db.Delete(&user)
+	return 1
+}
+
 // AddUser : Method to add user to db
 func (d *DB) AddUser(name string) int {
 	d.db.Create(&User{Name: name})
 	var user User
 	d.db.First(&user, "name = ?", "Kahvi")
-
-	fmt.Println("\n" + user.Name + "\n" + "Fuck yeah")
 
 	return 1
 }
@@ -63,6 +67,7 @@ func (d *DB) PrintAll() map[string]interface{} {
 func (d *DB) GetUsers() map[string]interface{} {
 	var users []User
 	d.db.Find(&users)
+
 	return gin.H{
 		"users": users,
 	}

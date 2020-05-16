@@ -28,15 +28,12 @@ func main() {
 	})
 
 	r.GET("/ping", pong)
+
 	r.GET("/users", fetchUserList(&db))
 
-	// r.GET("/user/:name", showUser(&db))
+	r.POST("/add", addHandler(&db))
 
-	// r.GET("/change/:nameValue", changeUserValueString(&db))
-
-	// r.GET("/params", changeUserValueQuery(&db))
-
-	r.POST("/post", post(&db))
+	r.POST("/delete", deleteHandler(&db))
 
 	r.Run(":8080") // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
 }
@@ -48,61 +45,18 @@ func pong(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"message": "pong",
 	})
-	// fmt.Println(c.Request.Header)
-	// fmt.Println(c.Request.Body)
 }
 
-// func showUser(du *storage.DB) gin.HandlerFunc {
-// 	return func(c *gin.Context) {
-
-// 		user := c.Params.ByName("name")
-// 		d.Users = append(d.Users, user)
-
-// 		d.Number++
-// 		// fmt.Println(c.Request.Proto)
-
-// 		value, ok := d.DB[user]
-// 		if ok {
-// 			c.JSON(200, gin.H{"user": user, "value": value, "something": d.PrintAll()})
-// 		} else {
-// 			c.JSON(200, gin.H{"user": user, "status": "no value"})
-// 		}
-// 	}
-// }
-
-// func changeUserValueString(d *storage.DBS) gin.HandlerFunc {
-// 	return func(c *gin.Context) {
-// 		nameValue := c.Params.ByName("nameValue")
-// 		d.Number++
-
-// 		// fmt.Println(c.Request)
-// 		params := strings.Split(nameValue, "=")
-// 		user, value := params[0], params[1]
-
-// 		d.DB[user] = value
-// 		c.JSON(200, gin.H{"message": "saved"})
-// 	}
-// }
-
-// func changeUserValueQuery(d *storage.DBS) gin.HandlerFunc {
-// 	return func(c *gin.Context) {
-// 		user := c.Query("user")
-// 		value := c.Query("value")
-// 		d.Number++
-
-// 		d.DB[user] = value
-// 		c.JSON(200, gin.H{"message": "saved"})
-// 	}
-// }
-
-// ResponseBody : struct to bind the JSON response body
-type ResponseBody struct {
+// AddPostBody : struct to bind the JSON response body
+type AddPostBody struct {
 	User string `json:"user"`
 }
 
-func post(d *storage.DB) gin.HandlerFunc {
+func addHandler(d *storage.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var rb ResponseBody
+		d.Number++
+
+		var rb AddPostBody
 		c.BindJSON(&rb)
 
 		d.AddUser(rb.User)
@@ -113,9 +67,30 @@ func post(d *storage.DB) gin.HandlerFunc {
 	}
 }
 
+// DeletePostBody : struct to bind the JSON response body
+type DeletePostBody struct {
+	ID uint `json:"id"`
+}
+
+func deleteHandler(d *storage.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		d.Number++
+
+		var rb DeletePostBody
+		c.BindJSON(&rb)
+
+		d.DeleteUser(rb.ID)
+		fmt.Println(rb)
+
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.JSON(200, gin.H{"list": d.GetUsers()})
+	}
+}
+
 func fetchUserList(d *storage.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		d.Number++
+
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.JSON(200, gin.H{"list": d.GetUsers()})
 	}
