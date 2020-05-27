@@ -92,6 +92,6 @@ func fetchUserList(d *storage.DB) gin.HandlerFunc {
 		d.Number++
 
 		c.Header("Access-Control-Allow-Origin", "*")
-		c.JSON(200, gin.H{"list": d.GetUsers()})
+		c.JSON(200, d.GetUsers())
 	}
 }
