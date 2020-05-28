@@ -6,7 +6,7 @@ gin_server is a web server implemented using [Gin](https://github.com/gin-gonic/
 ## Installation
 1. Clone repository
 2. Create database with mysql
-3. Connect gorm to database with `gorm.Open()` [here](https://github.com/iamkahvi/go_project_backend/blob/master/storage/main.go#L31)
+3. Connect gorm to database with `gorm.Open()` [here](storage/main.go#L31)
 
 ## Usage
 In the project directory, run
@@ -15,7 +15,7 @@ go run main.go
 ```
 
 ## API Documentation
-Located in [docs.md](https://github.com/iamkahvi/go_project_backend/blob/master/docs.md)
+Located in [docs.md](docs.md)
 
 ## Built With
 - [gin](https://github.com/gin-gonic/gin)
