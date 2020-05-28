@@ -1,12 +1,6 @@
 # Documentation for gin_server
 
 ## Routes
-- GET   /ping
-- GET   /users
-- POST  /add
-- POST  /delete
-
-new plan:
 - GET /ping<br>
 returns pong
 
