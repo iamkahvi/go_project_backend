@@ -17,4 +17,3 @@
 
 ### Config
 - Locked to `http://google.com` and `http://localhost:3000` origins
-- Running on `:8080`
