@@ -31,11 +31,11 @@ func main() {
 
 	r.GET("/users", fetchUserList(&db))
 
-	r.POST("/add", addHandler(&db))
+	r.POST("/users", addHandler(&db))
 
-	r.POST("/delete", deleteHandler(&db))
+	r.DELETE("/users", deleteHandler(&db))
 
-	r.Run(":8080") // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
+	r.Run()
 }
 
 const m string = "pong"
@@ -59,11 +59,33 @@ func addHandler(d *storage.DB) gin.HandlerFunc {
 		var rb AddPostBody
 		c.BindJSON(&rb)
 
-		d.AddUser(rb.User)
+		if rb.User == "" {
+			fmt.Println("Invalid format")
+			c.Header("Access-Control-Allow-Origin", "*")
+			c.JSON(400, gin.H{"error": "Invalid format"})
+			return
+		}
+
+		err := d.AddUser(rb.User)
+		if err != nil {
+			fmt.Println(err)
+			c.Header("Access-Control-Allow-Origin", "*")
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
 		fmt.Println(rb)
 
+		users, err := d.GetUsers()
+		if err != nil {
+			fmt.Println(err)
+			c.Header("Access-Control-Allow-Origin", "*")
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
 		c.Header("Access-Control-Allow-Origin", "*")
-		c.JSON(200, gin.H{"list": d.GetUsers()})
+		c.JSON(200, gin.H{"list": users})
 	}
 }
 
@@ -79,11 +101,26 @@ func deleteHandler(d *storage.DB) gin.HandlerFunc {
 		var rb DeletePostBody
 		c.BindJSON(&rb)
 
-		d.DeleteUser(rb.ID)
+		err := d.DeleteUser(rb.ID)
+		if err != nil {
+			fmt.Println(err)
+			c.Header("Access-Control-Allow-Origin", "*")
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
 		fmt.Println(rb)
 
+		users, err := d.GetUsers()
+		if err != nil {
+			fmt.Println(err)
+			c.Header("Access-Control-Allow-Origin", "*")
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
 		c.Header("Access-Control-Allow-Origin", "*")
-		c.JSON(200, gin.H{"list": d.GetUsers()})
+		c.JSON(200, gin.H{"list": users})
 	}
 }
 
@@ -91,7 +128,15 @@ func fetchUserList(d *storage.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		d.Number++
 
+		users, err := d.GetUsers()
+		if err != nil {
+			fmt.Println(err)
+			c.Header("Access-Control-Allow-Origin", "*")
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
 		c.Header("Access-Control-Allow-Origin", "*")
-		c.JSON(200, d.GetUsers())
+		c.JSON(200, users)
 	}
 }

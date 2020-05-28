@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"errors"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -50,20 +51,26 @@ func (d *DB) InitDB() {
 }
 
 // DeleteUser : Method to delete a user
-func (d *DB) DeleteUser(id uint) int {
+func (d *DB) DeleteUser(id uint) error {
 	var user User
 	user.Model.ID = id
-	d.db.Delete(&user)
-	return 1
+	err := d.db.Delete(&user).Error
+
+	if err != nil {
+		return errors.New("Error deleting from the database")
+	}
+
+	return nil
 }
 
 // AddUser : Method to add user to db
-func (d *DB) AddUser(name string) int {
-	d.db.Create(&User{Name: name})
-	var user User
-	d.db.First(&user, "name = ?", "Kahvi")
+func (d *DB) AddUser(name string) error {
+	err := d.db.Create(&User{Name: name}).Error
+	if err != nil {
+		return errors.New("Error adding to the database")
+	}
 
-	return 1
+	return nil
 }
 
 // PrintAll : Method to output the number field
@@ -74,11 +81,14 @@ func (d *DB) PrintAll() map[string]interface{} {
 }
 
 // GetUsers : Method to get list of users
-func (d *DB) GetUsers() map[string]interface{} {
+func (d *DB) GetUsers() (map[string]interface{}, error) {
 	var users []User
-	d.db.Find(&users)
+	err := d.db.Find(&users).Error
+	if err != nil {
+		return nil, errors.New("Error fetching from the database")
+	}
 
 	return gin.H{
 		"users": users,
-	}
+	}, nil
 }
