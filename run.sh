@@ -1,0 +1,1 @@
+GIN_MODE=release gin -p 8080 run main.go
