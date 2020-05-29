@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 
 	"example.com/gin_server/storage"
 	"github.com/gin-contrib/cors"
@@ -31,9 +32,13 @@ func main() {
 
 	r.GET("/users", fetchUserList(&db))
 
-	r.POST("/users", addHandler(&db))
+	r.POST("/users", addUser(&db))
 
-	r.DELETE("/users", deleteHandler(&db))
+	r.DELETE("/users", deleteUserList(&db))
+
+	r.GET("/users/:id", fetchUser(&db))
+
+	r.DELETE("/users/:id", deleteUser(&db))
 
 	r.Run()
 }
@@ -47,12 +52,65 @@ func pong(c *gin.Context) {
 	})
 }
 
+func fetchUser(d *storage.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		d.Number++
+		id := c.Param("id")
+
+		val, err := strconv.Atoi(id)
+		if err != nil {
+			fmt.Println("Invalid format")
+			c.Header("Access-Control-Allow-Origin", "*")
+			c.JSON(400, gin.H{"error": "Invalid format"})
+			return
+		}
+
+		user, err := d.GetUser(val)
+
+		if err != nil {
+			fmt.Println(err)
+			c.Header("Access-Control-Allow-Origin", "*")
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.JSON(200, gin.H{"status": "success", "user": user})
+	}
+}
+
+func deleteUser(d *storage.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		d.Number++
+		id := c.Param("id")
+
+		val, err := strconv.Atoi(id)
+		if err != nil {
+			fmt.Println("Invalid format")
+			c.Header("Access-Control-Allow-Origin", "*")
+			c.JSON(400, gin.H{"error": "Invalid format"})
+			return
+		}
+
+		err = d.DeleteUser(uint(val))
+		if err != nil {
+			fmt.Println(err)
+			c.Header("Access-Control-Allow-Origin", "*")
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.JSON(200, gin.H{"status": "success"})
+	}
+}
+
 // AddPostBody : struct to bind the JSON response body
 type AddPostBody struct {
 	User string `json:"user"`
 }
 
-func addHandler(d *storage.DB) gin.HandlerFunc {
+func addUser(d *storage.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		d.Number++
 
@@ -74,53 +132,49 @@ func addHandler(d *storage.DB) gin.HandlerFunc {
 			return
 		}
 
-		fmt.Println(rb)
-
-		users, err := d.GetUsers()
-		if err != nil {
-			fmt.Println(err)
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.JSON(200, gin.H{"list": users})
+		fetchUserList(d)(c)
 	}
 }
 
 // DeletePostBody : struct to bind the JSON response body
 type DeletePostBody struct {
-	ID uint `json:"id"`
+	IDs []uint `json:"ids"`
 }
 
-func deleteHandler(d *storage.DB) gin.HandlerFunc {
+func contains(s []uint, x uint) bool {
+	for _, item := range s {
+		if item == x {
+			return true
+		}
+	}
+	return false
+}
+
+func deleteUserList(d *storage.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		d.Number++
 
 		var rb DeletePostBody
 		c.BindJSON(&rb)
 
-		err := d.DeleteUser(rb.ID)
-		if err != nil {
-			fmt.Println(err)
+		if len(rb.IDs) == 0 || contains(rb.IDs, 0) {
+			fmt.Println("Invalid format")
 			c.Header("Access-Control-Allow-Origin", "*")
-			c.JSON(500, gin.H{"error": err.Error()})
+			c.JSON(400, gin.H{"error": "Invalid format"})
 			return
 		}
 
-		fmt.Println(rb)
-
-		users, err := d.GetUsers()
-		if err != nil {
-			fmt.Println(err)
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
+		for _, id := range rb.IDs {
+			err := d.DeleteUser(id)
+			if err != nil {
+				fmt.Println(err)
+				c.Header("Access-Control-Allow-Origin", "*")
+				c.JSON(500, gin.H{"error": err.Error()})
+				return
+			}
 		}
 
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.JSON(200, gin.H{"list": users})
+		fetchUserList(d)(c)
 	}
 }
 
@@ -128,7 +182,7 @@ func fetchUserList(d *storage.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		d.Number++
 
-		users, err := d.GetUsers()
+		users, err := d.GetAllUsers()
 		if err != nil {
 			fmt.Println(err)
 			c.Header("Access-Control-Allow-Origin", "*")
@@ -137,6 +191,6 @@ func fetchUserList(d *storage.DB) gin.HandlerFunc {
 		}
 
 		c.Header("Access-Control-Allow-Origin", "*")
-		c.JSON(200, users)
+		c.JSON(200, gin.H{"status": "success", "users": users})
 	}
 }

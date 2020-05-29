@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"errors"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -57,7 +56,7 @@ func (d *DB) DeleteUser(id uint) error {
 	err := d.db.Delete(&user).Error
 
 	if err != nil {
-		return errors.New("Error deleting from the database")
+		return err
 	}
 
 	return nil
@@ -67,7 +66,7 @@ func (d *DB) DeleteUser(id uint) error {
 func (d *DB) AddUser(name string) error {
 	err := d.db.Create(&User{Name: name}).Error
 	if err != nil {
-		return errors.New("Error adding to the database")
+		return err
 	}
 
 	return nil
@@ -80,15 +79,24 @@ func (d *DB) PrintAll() map[string]interface{} {
 	}
 }
 
-// GetUsers : Method to get list of users
-func (d *DB) GetUsers() (map[string]interface{}, error) {
+// GetAllUsers : Method to get list of users
+func (d *DB) GetAllUsers() ([]User, error) {
 	var users []User
 	err := d.db.Find(&users).Error
 	if err != nil {
-		return nil, errors.New("Error fetching from the database")
+		return users, err
 	}
 
-	return gin.H{
-		"users": users,
-	}, nil
+	return users, nil
+}
+
+// GetUser : Method to get user from id
+func (d *DB) GetUser(id int) (User, error) {
+	var user User
+	err := d.db.Find(&user, id).Error
+	if err != nil {
+		return user, err
+	}
+
+	return user, nil
 }
