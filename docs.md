@@ -4,6 +4,12 @@
 - GET /ping<br>
 returns pong
 
+- POST /auth/:email<br>
+sends passcode to provided email
+
+- POST /auth<br>
+returns a JWT token if passcode is correct
+
 - GET /users<br>
 returns list of users
 
