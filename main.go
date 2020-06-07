@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"log"
 	"math/big"
@@ -49,7 +50,7 @@ func main() {
 	r.GET("/", func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.HTML(200, "main.html", gin.H{
-			"title": "Main website",
+			"title": "Gin Server",
 		})
 	})
 
@@ -62,6 +63,22 @@ func main() {
 	r.Run()
 }
 
+func handleError(status int, err error, c *gin.Context) {
+	log.Println(err)
+	switch status {
+	case 400:
+		log.Println("Invalid code")
+		c.JSON(400, gin.H{"error": "Invalid code"})
+	case 401:
+		log.Println("Unauthorized")
+		c.JSON(400, gin.H{"error": "Unauthorized"})
+	case 500:
+		log.Println("Internal Error")
+		c.JSON(500, gin.H{"error": err.Error()})
+	}
+	c.Abort()
+}
+
 func isAuthorized(d *storage.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 
@@ -69,9 +86,7 @@ func isAuthorized(d *storage.DB) gin.HandlerFunc {
 		authHeader := strings.Split(c.GetHeader("Authorization"), " ")
 
 		if len(authHeader) != 2 {
-			log.Println("Invalid auth format")
-			c.JSON(400, gin.H{"error": "Invalid auth format"})
-			c.Abort()
+			handleError(http.StatusBadRequest, errors.New("Invalid auth format"), c)
 			return
 		}
 
@@ -97,9 +112,7 @@ func isAuthorized(d *storage.DB) gin.HandlerFunc {
 			}
 		}
 
-		log.Println("unauthorized")
-		c.JSON(http.StatusUnauthorized, gin.H{"status": "unauthorized"})
-		c.Abort()
+		handleError(http.StatusUnauthorized, errors.New("Unauthorized"), c)
 		return
 	}
 }
@@ -153,8 +166,7 @@ func handleCodeSubmit(d *storage.DB) gin.HandlerFunc {
 		r := d.CodeMap[rb.Email]
 
 		if r < 0 {
-			log.Println("Invalid internal code")
-			c.JSON(500, gin.H{"error": "Invalid internal code"})
+			handleError(500, errors.New("Invalid internal code"), c)
 			return
 		}
 
@@ -163,7 +175,7 @@ func handleCodeSubmit(d *storage.DB) gin.HandlerFunc {
 			token, err := generateJWT(rb.Email, JWTSigningKey)
 			if err != nil {
 				log.Println("Error generating JWT")
-				c.JSON(500, gin.H{"error": "Internal error"})
+				handleError(500, err, c)
 				return
 
 			}
@@ -171,9 +183,7 @@ func handleCodeSubmit(d *storage.DB) gin.HandlerFunc {
 			return
 		}
 
-		log.Println("Invalid code")
-		c.JSON(400, gin.H{"error": "Invalid code"})
-		return
+		handleError(401, errors.New("Invalid code"), c)
 	}
 }
 
@@ -185,15 +195,17 @@ func handleCodeReq(d *storage.DB) gin.HandlerFunc {
 
 		r, err := generateCode()
 		if err != nil {
-			log.Println(err)
 			log.Println("Generating passcode failed")
+			handleError(500, err, c)
+			return
 		}
 		d.CodeMap[to] = r
 
 		err = email.SendCode(to, r)
 		if err != nil {
-			log.Println(err)
 			log.Println("Sending email failed")
+			handleError(500, err, c)
+			return
 		}
 
 		c.Header("Access-Control-Allow-Origin", "*")
@@ -224,18 +236,14 @@ func fetchUser(d *storage.DB) gin.HandlerFunc {
 
 		val, err := strconv.Atoi(id)
 		if err != nil {
-			log.Println("Invalid format")
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.JSON(400, gin.H{"error": "Invalid format"})
+			handleError(400, err, c)
 			return
 		}
 
 		user, err := d.GetUser(val)
 
 		if err != nil {
-			log.Println(err)
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.JSON(500, gin.H{"error": err.Error()})
+			handleError(500, err, c)
 			return
 		}
 
@@ -251,17 +259,13 @@ func deleteUser(d *storage.DB) gin.HandlerFunc {
 
 		val, err := strconv.Atoi(id)
 		if err != nil {
-			log.Println("Invalid format")
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.JSON(400, gin.H{"error": "Invalid format"})
+			handleError(400, err, c)
 			return
 		}
 
 		err = d.DeleteUser(uint(val))
 		if err != nil {
-			log.Println(err)
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.JSON(500, gin.H{"error": err.Error()})
+			handleError(500, err, c)
 			return
 		}
 
@@ -283,17 +287,13 @@ func addUser(d *storage.DB) gin.HandlerFunc {
 		c.BindJSON(&rb)
 
 		if rb.User == "" {
-			log.Println("Invalid format")
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.JSON(400, gin.H{"error": "Invalid format"})
+			handleError(400, errors.New("Invalid format"), c)
 			return
 		}
 
 		err := d.AddUser(rb.User)
 		if err != nil {
-			log.Println(err)
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.JSON(500, gin.H{"error": err.Error()})
+			handleError(500, err, c)
 			return
 		}
 
@@ -323,18 +323,14 @@ func deleteUserList(d *storage.DB) gin.HandlerFunc {
 		c.BindJSON(&rb)
 
 		if len(rb.IDs) == 0 || contains(rb.IDs, 0) {
-			log.Println("Invalid format")
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.JSON(400, gin.H{"error": "Invalid format"})
+			handleError(400, errors.New("Invalid format"), c)
 			return
 		}
 
 		for _, id := range rb.IDs {
 			err := d.DeleteUser(id)
 			if err != nil {
-				log.Println(err)
-				c.Header("Access-Control-Allow-Origin", "*")
-				c.JSON(500, gin.H{"error": err.Error()})
+				handleError(500, err, c)
 				return
 			}
 		}
@@ -349,9 +345,7 @@ func fetchUserList(d *storage.DB) gin.HandlerFunc {
 
 		users, err := d.GetAllUsers()
 		if err != nil {
-			log.Println(err)
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.JSON(500, gin.H{"error": err.Error()})
+			handleError(500, err, c)
 			return
 		}
 
