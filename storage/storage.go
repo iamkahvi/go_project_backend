@@ -28,13 +28,19 @@ type User struct {
 	Name string
 }
 
+// CodeItem : The object for storing passcode with expiry date
+type CodeItem struct {
+	Code   int
+	Expiry time.Time
+}
+
 // DB : The database struct to store stuff from the server
 type DB struct {
 	User    User
 	Item    Item
 	Number  int
 	db      *gorm.DB
-	CodeMap map[string]int
+	CodeMap map[string]CodeItem
 }
 
 // InitDB : This gets the sql thing idk
@@ -48,8 +54,8 @@ func (d *DB) InitDB() {
 	db.AutoMigrate(&User{})
 
 	d.db = db
-	d.CodeMap = make(map[string]int)
-	d.CodeMap[""] = -1
+	d.CodeMap = make(map[string]CodeItem)
+	d.CodeMap[""] = CodeItem{Code: -1}
 }
 
 // DeleteUser : Method to delete a user

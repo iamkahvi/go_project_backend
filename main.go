@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"example.com/gin_server/email"
 	"example.com/gin_server/storage"
@@ -21,6 +22,9 @@ import (
 // JWTSigningKey : key to sign JWT tokens with
 // This definitely should be an env variable or something
 var JWTSigningKey = []byte("verysecretkey")
+
+// CodeExpiryDuration : how long a passcode is valid for
+var CodeExpiryDuration, err = time.ParseDuration("5m")
 
 func main() {
 
@@ -67,11 +71,11 @@ func handleError(status int, err error, c *gin.Context) {
 	log.Println(err)
 	switch status {
 	case 400:
-		log.Println("Invalid code")
-		c.JSON(400, gin.H{"error": "Invalid code"})
+		log.Println(err)
+		c.JSON(400, gin.H{"error": err.Error()})
 	case 401:
 		log.Println("Unauthorized")
-		c.JSON(400, gin.H{"error": "Unauthorized"})
+		c.JSON(401, gin.H{"error": "Unauthorized"})
 	case 500:
 		log.Println("Internal Error")
 		c.JSON(500, gin.H{"error": err.Error()})
@@ -163,14 +167,19 @@ func handleCodeSubmit(d *storage.DB) gin.HandlerFunc {
 		var rb AuthReqBody
 		c.BindJSON(&rb)
 
-		r := d.CodeMap[rb.Email]
+		code, exp := d.CodeMap[rb.Email].Code, d.CodeMap[rb.Email].Expiry
 
-		if r < 0 {
+		if exp.Before(time.Now()) {
+			handleError(400, errors.New("Passcode expired"), c)
+			return
+		}
+
+		if code < 0 {
 			handleError(500, errors.New("Invalid internal code"), c)
 			return
 		}
 
-		if r == rb.Code {
+		if code == rb.Code {
 			log.Println("Valid Code")
 			token, err := generateJWT(rb.Email, JWTSigningKey)
 			if err != nil {
@@ -199,7 +208,11 @@ func handleCodeReq(d *storage.DB) gin.HandlerFunc {
 			handleError(500, err, c)
 			return
 		}
-		d.CodeMap[to] = r
+
+		d.CodeMap[to] = storage.CodeItem{
+			Code:   r,
+			Expiry: time.Now().Add(CodeExpiryDuration),
+		}
 
 		err = email.SendCode(to, r)
 		if err != nil {
