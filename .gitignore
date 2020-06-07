@@ -16,3 +16,7 @@ gin-bin
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+credentials.json
+token.json
+mailgun.json

@@ -1,16 +1,29 @@
 package main
 
 import (
+	"crypto/rand"
+	"errors"
 	"fmt"
+	"log"
+	"math/big"
+	"net/http"
 	"strconv"
+	"strings"
 
+	"example.com/gin_server/email"
 	"example.com/gin_server/storage"
-	"github.com/gin-contrib/cors"
 
+	"github.com/dgrijalva/jwt-go"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
+// JWTSigningKey : key to sign JWT tokens with
+// This definitely should be an env variable or something
+var JWTSigningKey = []byte("verysecretkey")
+
 func main() {
+
 	db := storage.DB{Number: 0}
 	db.InitDB()
 
@@ -20,27 +33,88 @@ func main() {
 	config.AllowOrigins = []string{"http://google.com", "http://localhost:3000"}
 	r.Use(cors.New(config))
 
+	auth := r.Group("/", isAuthorized(&db))
+	{
+		auth.GET("/users", fetchUserList(&db))
+
+		auth.POST("/users", addUser(&db))
+
+		auth.DELETE("/users", deleteUserList(&db))
+
+		auth.GET("/users/:id", fetchUser(&db))
+
+		auth.DELETE("/users/:id", deleteUser(&db))
+	}
+
 	r.LoadHTMLGlob("views/*")
 	r.GET("/", func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.HTML(200, "main.html", gin.H{
-			"title": "Main website",
+			"title": "Gin Server",
 		})
 	})
 
+	r.POST("/auth/:email", handleCodeReq(&db))
+
+	r.POST("/auth", handleCodeSubmit(&db))
+
 	r.GET("/ping", pong)
 
-	r.GET("/users", fetchUserList(&db))
-
-	r.POST("/users", addUser(&db))
-
-	r.DELETE("/users", deleteUserList(&db))
-
-	r.GET("/users/:id", fetchUser(&db))
-
-	r.DELETE("/users/:id", deleteUser(&db))
-
 	r.Run()
+}
+
+func handleError(status int, err error, c *gin.Context) {
+	log.Println(err)
+	switch status {
+	case 400:
+		log.Println("Invalid code")
+		c.JSON(400, gin.H{"error": "Invalid code"})
+	case 401:
+		log.Println("Unauthorized")
+		c.JSON(400, gin.H{"error": "Unauthorized"})
+	case 500:
+		log.Println("Internal Error")
+		c.JSON(500, gin.H{"error": err.Error()})
+	}
+	c.Abort()
+}
+
+func isAuthorized(d *storage.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+
+		// Splitting auth header by spaces
+		authHeader := strings.Split(c.GetHeader("Authorization"), " ")
+
+		if len(authHeader) != 2 {
+			handleError(http.StatusBadRequest, errors.New("Invalid auth format"), c)
+			return
+		}
+
+		if authHeader[0] == "Bearer" {
+			claims := jwt.MapClaims{}
+			token, err := jwt.ParseWithClaims(authHeader[1], claims, func(token *jwt.Token) (interface{}, error) {
+				// Check signing method
+				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+					return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+				}
+				// I'm not doing anymore validation stuff here. I'm only using one signing key
+				return JWTSigningKey, nil
+			})
+
+			if token.Valid {
+				fmt.Println("claims", claims)
+				log.Println("authorized")
+				return
+			}
+
+			if err != nil {
+				log.Println(err.Error())
+			}
+		}
+
+		handleError(http.StatusUnauthorized, errors.New("Unauthorized"), c)
+		return
+	}
 }
 
 const m string = "pong"
@@ -52,6 +126,109 @@ func pong(c *gin.Context) {
 	})
 }
 
+func generateCode() (int, error) {
+	max := big.NewInt(10000)
+
+	r, err := rand.Int(rand.Reader, max)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(r.Int64()), nil
+}
+
+func generateRandBytes() ([]byte, error) {
+	c := 10
+	b := make([]byte, c)
+	_, err := rand.Read(b)
+	if err != nil {
+		log.Println("error:", err)
+		return []byte{}, err
+	}
+	// The slice should now contain random bytes instead of only zeroes.
+	return b, nil
+}
+
+// AuthReqBody : struct to bind the JSON response body
+type AuthReqBody struct {
+	Code  int    `json:"code"`
+	Email string `json:"email"`
+}
+
+func handleCodeSubmit(d *storage.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		d.Number++
+		c.Header("Access-Control-Allow-Origin", "*")
+
+		var rb AuthReqBody
+		c.BindJSON(&rb)
+
+		r := d.CodeMap[rb.Email]
+
+		if r < 0 {
+			handleError(500, errors.New("Invalid internal code"), c)
+			return
+		}
+
+		if r == rb.Code {
+			log.Println("Valid Code")
+			token, err := generateJWT(rb.Email, JWTSigningKey)
+			if err != nil {
+				log.Println("Error generating JWT")
+				handleError(500, err, c)
+				return
+
+			}
+			c.JSON(200, gin.H{"status": "success", "token": token})
+			return
+		}
+
+		handleError(401, errors.New("Invalid code"), c)
+	}
+}
+
+func handleCodeReq(d *storage.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		d.Number++
+
+		to := c.Param("email")
+
+		r, err := generateCode()
+		if err != nil {
+			log.Println("Generating passcode failed")
+			handleError(500, err, c)
+			return
+		}
+		d.CodeMap[to] = r
+
+		err = email.SendCode(to, r)
+		if err != nil {
+			log.Println("Sending email failed")
+			handleError(500, err, c)
+			return
+		}
+
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.JSON(200, gin.H{"status": "success"})
+	}
+}
+
+func generateJWT(email string, key []byte) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"email": email,
+	})
+
+	tokenString, err := token.SignedString(key)
+
+	if err != nil {
+		log.Println(err)
+		log.Println("Generating JWT failed")
+		return "", err
+	}
+
+	return tokenString, nil
+}
+
 func fetchUser(d *storage.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		d.Number++
@@ -59,18 +236,14 @@ func fetchUser(d *storage.DB) gin.HandlerFunc {
 
 		val, err := strconv.Atoi(id)
 		if err != nil {
-			fmt.Println("Invalid format")
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.JSON(400, gin.H{"error": "Invalid format"})
+			handleError(400, err, c)
 			return
 		}
 
 		user, err := d.GetUser(val)
 
 		if err != nil {
-			fmt.Println(err)
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.JSON(500, gin.H{"error": err.Error()})
+			handleError(500, err, c)
 			return
 		}
 
@@ -86,17 +259,13 @@ func deleteUser(d *storage.DB) gin.HandlerFunc {
 
 		val, err := strconv.Atoi(id)
 		if err != nil {
-			fmt.Println("Invalid format")
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.JSON(400, gin.H{"error": "Invalid format"})
+			handleError(400, err, c)
 			return
 		}
 
 		err = d.DeleteUser(uint(val))
 		if err != nil {
-			fmt.Println(err)
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.JSON(500, gin.H{"error": err.Error()})
+			handleError(500, err, c)
 			return
 		}
 
@@ -118,17 +287,13 @@ func addUser(d *storage.DB) gin.HandlerFunc {
 		c.BindJSON(&rb)
 
 		if rb.User == "" {
-			fmt.Println("Invalid format")
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.JSON(400, gin.H{"error": "Invalid format"})
+			handleError(400, errors.New("Invalid format"), c)
 			return
 		}
 
 		err := d.AddUser(rb.User)
 		if err != nil {
-			fmt.Println(err)
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.JSON(500, gin.H{"error": err.Error()})
+			handleError(500, err, c)
 			return
 		}
 
@@ -158,18 +323,14 @@ func deleteUserList(d *storage.DB) gin.HandlerFunc {
 		c.BindJSON(&rb)
 
 		if len(rb.IDs) == 0 || contains(rb.IDs, 0) {
-			fmt.Println("Invalid format")
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.JSON(400, gin.H{"error": "Invalid format"})
+			handleError(400, errors.New("Invalid format"), c)
 			return
 		}
 
 		for _, id := range rb.IDs {
 			err := d.DeleteUser(id)
 			if err != nil {
-				fmt.Println(err)
-				c.Header("Access-Control-Allow-Origin", "*")
-				c.JSON(500, gin.H{"error": err.Error()})
+				handleError(500, err, c)
 				return
 			}
 		}
@@ -184,9 +345,7 @@ func fetchUserList(d *storage.DB) gin.HandlerFunc {
 
 		users, err := d.GetAllUsers()
 		if err != nil {
-			fmt.Println(err)
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.JSON(500, gin.H{"error": err.Error()})
+			handleError(500, err, c)
 			return
 		}
 
