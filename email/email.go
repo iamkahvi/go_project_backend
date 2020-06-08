@@ -46,13 +46,16 @@ func SendCode(to string, code int) error {
 
 	codeString := strconv.Itoa(code)
 
-	sender := "sender@example.com"
+	sender := "mail@kahvipatel.com"
 	subject := "Your passcode"
 	body := "Hi, enter " + codeString
 	recipient := to
 
 	// The message object allows you to add attachments and Bcc recipients
 	message := mg.NewMessage(sender, subject, body, recipient)
+	message.SetTemplate("password-template")
+	message.AddTemplateVariable("passcode", codeString)
+	message.AddTemplateVariable("link", "https://kahvipatel.com/book-list")
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
