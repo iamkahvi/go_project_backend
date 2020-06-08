@@ -25,7 +25,9 @@ type Item struct {
 // User : The user object for storing a user's info
 type User struct {
 	gorm.Model
-	Name string
+	Name    string
+	Age     int
+	Message string
 }
 
 // CodeItem : The object for storing passcode with expiry date
@@ -72,8 +74,8 @@ func (d *DB) DeleteUser(id uint) error {
 }
 
 // AddUser : Method to add user to db
-func (d *DB) AddUser(name string) error {
-	err := d.db.Create(&User{Name: name}).Error
+func (d *DB) AddUser(name string, age int) error {
+	err := d.db.Create(&User{Name: name, Age: age}).Error
 	if err != nil {
 		return err
 	}

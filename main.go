@@ -290,6 +290,7 @@ func deleteUser(d *storage.DB) gin.HandlerFunc {
 // AddPostBody : struct to bind the JSON response body
 type AddPostBody struct {
 	User string `json:"user"`
+	Age  int    `json:"age"`
 }
 
 func addUser(d *storage.DB) gin.HandlerFunc {
@@ -304,7 +305,7 @@ func addUser(d *storage.DB) gin.HandlerFunc {
 			return
 		}
 
-		err := d.AddUser(rb.User)
+		err := d.AddUser(rb.User, rb.Age)
 		if err != nil {
 			handleError(500, err, c)
 			return
