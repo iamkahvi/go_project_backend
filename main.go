@@ -34,10 +34,11 @@ func main() {
 	r := gin.Default()
 
 	config := cors.DefaultConfig()
+	config.AllowHeaders = []string{"authorization", "content-type"}
 	config.AllowOrigins = []string{"http://google.com", "http://localhost:3000"}
 	r.Use(cors.New(config))
 
-	auth := r.Group("/", isAuthorized(&db))
+	auth := r.Group("/", cors.New(config), isAuthorized(&db))
 	{
 		auth.GET("/users", fetchUserList(&db))
 
@@ -85,6 +86,7 @@ func handleError(status int, err error, c *gin.Context) {
 
 func isAuthorized(d *storage.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		c.Header("Access-Control-Allow-Origin", "*")
 
 		// Splitting auth header by spaces
 		authHeader := strings.Split(c.GetHeader("Authorization"), " ")
