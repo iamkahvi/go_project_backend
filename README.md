@@ -24,3 +24,9 @@ Located in [docs.md](docs.md)
 
 ## Config
 - Locked to `http://google.com` and `http://localhost:3000` origins
+
+## Inspiration
+
+- https://github.com/burxtx/gin-microservice-boilerplate
+- https://github.com/go-kit/kit
+- https://github.com/demo-apps/go-gin-app
